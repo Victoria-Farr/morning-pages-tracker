@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Morning Pages Streak Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --page-bg:      #FFFFFF;
+  --card-bg:      #F7F7F5;
+  --stat-bg:      #F0EFED;
+  --border:       rgba(55,53,47,0.10);
+  --border-mid:   rgba(55,53,47,0.18);
+  --text-primary: #37352F;
+  --text-secondary: #6B6860;
+  --text-muted:   #9B9A97;
+  --accent:       #CC782F;
+  --accent-bg:    #F8ECDF;
+  --on-accent:    #FFFFFF;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --page-bg:      #191919;
+    --card-bg:      #252525;
+    --stat-bg:      #2E2724;
+    --border:       rgba(255,255,255,0.08);
+    --border-mid:   rgba(255,255,255,0.14);
+    --text-primary: #D4D4D4;
+    --text-secondary: #A0A09A;
+    --text-muted:   #666660;
+    --accent:       #CB7B37;
+    --accent-bg:    #36291F;
+    --on-accent:    #191919;
+  }
+}
+
+body {
+  background: var(--page-bg);
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  display: flex;
+  justify-content: center;
+  padding: 24px 12px;
+}
+
+.card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--card-bg);
+  border: 0.5px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.eyebrow {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.month-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.stat {
+  background: var(--stat-bg);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.flame {
+  font-size: 16px;
+}
+
+.dot-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--card-bg);
+  border: 0.5px solid var(--border-mid);
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.dot.locked {
+  color: var(--text-muted);
+  cursor: default;
+  opacity: 0.5;
+}
+
+.dot.today {
+  border: 1.5px solid var(--accent);
+}
+
+.dot.done {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+</style>
+</head>
+<body>
+
+<div class="card">
+  <p class="eyebrow">Morning pages</p>
+  <p class="month-title" id="monthTitle"></p>
+
+  <div class="stats">
+    <div class="stat">
+      <p class="stat-label">Streak</p>
+      <p class="stat-value"><span class="flame">&#9679;</span><span id="currentStreak">0</span></p>
+    </div>
+    <div class="stat">
+      <p class="stat-label">Best</p>
+      <p class="stat-value" id="bestStreak">0</p>
+    </div>
+    <div class="stat">
+      <p class="stat-label">This month</p>
+      <p class="stat-value" id="completion">0/0</p>
+    </div>
+  </div>
+
+  <div class="dot-grid" id="dotGrid"></div>
+
+  <p class="hint">Tap a day to mark it done. Future days are locked.</p>
+</div>
+
+<script>
+(function () {
+  var today = new Date();
+  var year = today.getFullYear();
+  var month = today.getMonth();
+  var currentDay = today.getDate();
+  var daysInMonth = new Date(year, month + 1, 0).getDate();
+  var monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  document.getElementById('monthTitle').textContent = monthNames[month] + ' ' + year;
+
+  var storageKey = 'morningPagesTracker-' + year + '-' + month;
+  var state = {};
+  try {
+    var saved = localStorage.getItem(storageKey);
+    if (saved) state = JSON.parse(saved);
+  } catch (e) {}
+
+  function save() {
+    try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch (e) {}
+  }
+
+  function computeCurrentStreak() {
+    var streak = 0;
+    var d = currentDay;
+    if (!state[d]) d = d - 1;
+    while (d >= 1 && state[d]) {
+      streak++;
+      d--;
+    }
+    return streak;
+  }
+
+  function computeBestStreak() {
+    var best = 0, run = 0;
+    for (var d = 1; d <= daysInMonth; d++) {
+      if (state[d]) {
+        run++;
+        if (run > best) best = run;
+      } else {
+        run = 0;
+      }
+    }
+    return best;
+  }
+
+  function computeCompletion() {
+    var done = 0;
+    for (var d = 1; d <= currentDay; d++) {
+      if (state[d]) done++;
+    }
+    return done + '/' + currentDay;
+  }
+
+  function renderStats() {
+    document.getElementById('currentStreak').textContent = computeCurrentStreak();
+    document.getElementById('bestStreak').textContent = computeBestStreak();
+    document.getElementById('completion').textContent = computeCompletion();
+  }
+
+  function renderGrid() {
+    var grid = document.getElementById('dotGrid');
+    grid.innerHTML = '';
+    for (var day = 1; day <= daysInMonth; day++) {
+      (function (day) {
+        var dot = document.createElement('div');
+        dot.textContent = day;
+        dot.className = 'dot';
+        if (day > currentDay) dot.classList.add('locked');
+        if (day === currentDay) dot.classList.add('today');
+        if (state[day]) dot.classList.add('done');
+
+        if (day <= currentDay) {
+          dot.addEventListener('click', function () {
+            state[day] = !state[day];
+            save();
+            dot.classList.toggle('done');
+            renderStats();
+          });
+        }
+        grid.appendChild(dot);
+      })(day);
+    }
+  }
+
+  renderGrid();
+  renderStats();
+})();
+</script>
+
+</body>
+</html>
